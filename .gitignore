@@ -1,3 +1,6 @@
+outputs
+hostfile
+
 # log and data files
 *.model
 *.pkl

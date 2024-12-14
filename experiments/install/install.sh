@@ -48,15 +48,6 @@ pip install triton
 # install apex, transformer engine, mcore
 # https://github.com/NVIDIA/NeMo/tree/main?tab=readme-ov-file#install-llms-and-mms-dependencies
 
-# apex
-git clone https://github.com/NVIDIA/apex.git
-cd apex
-git checkout $apex_commit
-pip install . -v --no-build-isolation --disable-pip-version-check --no-cache-dir --config-settings "--build-option=--cpp_ext --cuda_ext --fast_layer_norm --distributed_adam --deprecated_fused_adam --group_norm"
-
-# transformer engine
-pip install git+https://github.com/NVIDIA/TransformerEngine.git@v1.12
-
 # mcore
 git clone https://github.com/NVIDIA/Megatron-LM.git
 cd Megatron-LM
@@ -79,6 +70,21 @@ pip install nemo_toolkit['all']
 
 # pytorch re-install
 python setup.py develop
+
+# apex
+git clone https://github.com/NVIDIA/apex.git
+cd apex
+pip install . -v --no-build-isolation --disable-pip-version-check --no-cache-dir --config-settings "--build-option=--cpp_ext --cuda_ext --fast_layer_norm --distributed_adam --deprecated_fused_adam --group_norm"
+
+# flash attention
+pip uninstall flash-attn
+pip install flash-attn==2.6.3 --no-build-isolation
+
+# transformer engine
+git clone --branch stable --recursive https://github.com/NVIDIA/TransformerEngine.git
+cd TransformerEngine
+git checkout v1.12
+pip install .
 
 # nemo run
 pip install git+https://github.com/NVIDIA/NeMo-Run.git
