@@ -45,7 +45,7 @@ DATA_PARALLEL_SIZE=$((${NUM_GPUS} / (${TENSOR_PARALLEL_SIZE} * ${PIPELINE_PARALL
 
 # training config
 MICRO_BATCH_SIZE=1
-GLOBAL_BATCH_SIZE=1024
+GLOBAL_BATCH_SIZE=512
 TRAIN_STEPS=25000
 SEQ_LENGTH=8192
 
@@ -102,6 +102,7 @@ mpirun -np $NUM_GPUS \
   --context-parallel-size ${CONTEXT_PARALLEL_SIZE} \
   --use-mpi \
   --num-nodes ${NUM_NODES} \
+  --gpu-per-node ${NUM_GPU_PER_NODE} \
   --wandb-project "NeMo" \
   --wandb-entity "okoge" \
   --wandb-run-name ${JOB_NAME}

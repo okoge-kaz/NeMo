@@ -33,6 +33,7 @@ def parse_args():
     parser.add_argument("--context-parallel-size", type=int, default=1)
     parser.add_argument("--use-mpi", action='store_true')
     parser.add_argument("--num-nodes", type=int, default=1)
+    parser.add_argument("--gpu-per-node", type=int, default=4)
     # wandb args
     parser.add_argument("--wandb-project", type=str, default="llama-3.1-8b")
     parser.add_argument("--wandb-entity", type=str, default="nvidia")
@@ -50,7 +51,7 @@ if __name__ == "__main__":
         os.environ['RANK'] = str(global_rank)
         os.environ['LOCAL_RANK'] = str(local_rank)
         os.environ['WORLD_SIZE'] = str(world_size)
-
+        os.environ["NODE_RANK"] = str(global_rank // args.gpu_per_node)
 
     tokenizer = get_tokenizer(  # AutoTokenizer
         tokenizer_name=args.tokenizer_dir,
@@ -106,6 +107,7 @@ if __name__ == "__main__":
     )
     trainer = nl.Trainer(
         num_nodes=args.num_nodes,
+        devices=args.gpu_per_node,
         accelerator="gpu",
         plugins=nl.MegatronMixedPrecision(precision="bf16-mixed"),
         max_steps=args.train_iters,
@@ -114,6 +116,7 @@ if __name__ == "__main__":
         val_check_interval=500,
         limit_val_batches=10,
         limit_test_batches=10,
+        num_sanity_val_steps=0,
     )
 
     # logging
