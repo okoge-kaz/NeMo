@@ -1,12 +1,14 @@
 import argparse
 import os
 import torch
+import nemo
 from nemo import lightning as nl
 from nemo.collections import llm
 from nemo.collections.nlp.modules.common.tokenizer_utils import get_tokenizer
 from nemo.collections.llm.gpt.model.llama import Llama31Config8B, LlamaModel
 from megatron.core.optimizer import OptimizerConfig
 from pytorch_lightning.loggers import WandbLogger
+from nemo.lightning.pytorch.strategies.utils import RestoreConfig
 
 
 def parse_args():
@@ -20,6 +22,7 @@ def parse_args():
     parser.add_argument("--weight-decay", type=float, default=0.1)
     parser.add_argument("--train-iters", type=int, default=25000)
     parser.add_argument("--warmup-iters", type=int, default=1000)
+    parser.add_argument("--checkpoint-dir", type=str, default="")
     parser.add_argument("--checkpoint-save-dir", type=str, default="")
     # tokenizer args
     parser.add_argument("--tokenizer-dir", type=str, default="")
@@ -129,6 +132,18 @@ if __name__ == "__main__":
             name=args.wandb_run_name,
         )
     )
+    # resume
+    checkpoint_dir: str = args.checkpoint_dir
+    # if some files exist in checkpoint save directory, resume training
+    if os.path.exists(args.checkpoint_save_dir) and len(os.listdir(args.checkpoint_save_dir)) > 1:
+        checkpoint_dir = args.checkpoint_save_dir
+
+    resume = nl.AutoResume(
+        resume_if_exists=True,
+        restore_config=RestoreConfig(
+            path=checkpoint_dir,
+        )
+    )
 
     llm.train(
         model=model,
@@ -137,5 +152,5 @@ if __name__ == "__main__":
         log=nemo_logger,
         tokenizer=tokenizer,
         optim=optimizer,
-        resume=None,
+        resume=resume,
     )

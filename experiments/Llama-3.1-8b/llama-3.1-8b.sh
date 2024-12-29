@@ -1,6 +1,6 @@
 #!/bin/sh
 #$ -cwd
-#$ -l node_f=2
+#$ -l node_f=4
 #$ -l h_rt=00:01:00:00
 #$ -o outputs/Llama-3.1-8b/$JOB_ID.log
 #$ -e outputs/Llama-3.1-8b/$JOB_ID.log
@@ -56,8 +56,8 @@ WEIGHT_DECAY=0.1
 
 # model config
 TOKENIZER_MODEL=/gs/bs/tga-NII-LLM/hf-checkpoints/Meta-Llama-3.1-8B
-CHECKPOINT_DIR=/gs/bs/tga-NII-LLM/checkpoints/hf-to-megatron/Llama-3.1-8b/tp${TENSOR_PARALLEL_SIZE}-pp${PIPELINE_PARALLEL_SIZE}-v0.8
-CHECKPOINT_SAVE_DIR=/gs/bs/tga-NII-LLM/checkpoints/Llama-3.1-8b/tp${TENSOR_PARALLEL_SIZE}-pp${PIPELINE_PARALLEL_SIZE}-ct${CONTEXT_PARALLEL_SIZE}/LR${LR}-MINLR${MIN_LR}-WD${WEIGHT_DECAY}-v0.9.0
+CHECKPOINT_DIR=/gs/bs/tga-NII-LLM/checkpoints/hf-to-nemo/Llama-3.1-8b-nemo-v2/weights
+CHECKPOINT_SAVE_DIR=/gs/bs/tga-NII-LLM/checkpoints/nemo/Llama-3.1-8b/tp${TENSOR_PARALLEL_SIZE}-pp${PIPELINE_PARALLEL_SIZE}-ct${CONTEXT_PARALLEL_SIZE}/LR${LR}-MINLR${MIN_LR}-WD${WEIGHT_DECAY}-v2.0.0
 
 mkdir -p ${CHECKPOINT_SAVE_DIR}
 
@@ -93,6 +93,7 @@ mpirun -np $NUM_GPUS \
   --weight-decay ${WEIGHT_DECAY} \
   --train-iters ${TRAIN_STEPS} \
   --warmup-iters ${LR_WARMUP_STEPS} \
+  --checkpoint-dir ${CHECKPOINT_DIR} \
   --checkpoint-save-dir ${CHECKPOINT_SAVE_DIR} \
   --tokenizer-dir ${TOKENIZER_MODEL} \
   --data-path ${TRAIN_DATA_PATH} \
