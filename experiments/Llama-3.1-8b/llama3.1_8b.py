@@ -37,11 +37,24 @@ def parse_args():
     parser.add_argument("--use-mpi", action='store_true')
     parser.add_argument("--num-nodes", type=int, default=1)
     parser.add_argument("--gpu-per-node", type=int, default=4)
+    parser.add_argument("--overlap-grad-reduce", action='store_true')
+    parser.add_argument("--overlap-param-gather", action='store_true')
+    parser.add_argument("--use-distributed-optimizer", action='store_true')
+    parser.add_argument("--tp-comm-overlap", action='store_true')
     # wandb args
     parser.add_argument("--wandb-project", type=str, default="llama-3.1-8b")
     parser.add_argument("--wandb-entity", type=str, default="nvidia")
     parser.add_argument("--wandb-run-name", type=str, default="llama-3.1-8b")
+    parser.add_argument("--log-interval", type=int, default=1)
+    # optimizer args
+    parser.add_argument("--optimizer", type=str, default="adam", choices=["adam"])
+    parser.add_argument("--adam-beta1", type=float, default=0.9)
+    parser.add_argument("--adam-beta2", type=float, default=0.95)
+    parser.add_argument("--adam-eps", type=float, default=1e-8)
+    parser.add_argument("--clip-grad", type=float, default=1.0)
+
     args = parser.parse_args()
+
     return args
 
 if __name__ == "__main__":
@@ -69,6 +82,20 @@ if __name__ == "__main__":
         pin_memory=True,
         split="990,10,0",
     )
+    # distributed settings
+    is_overlap_grad_reduce = False
+    is_overlap_param_gather = False
+    is_use_distributed_optimizer = False
+    is_tp_comm_overlap = False
+
+    if args.overlap_grad_reduce:
+        is_overlap_grad_reduce = True
+    if args.overlap_param_gather:
+        is_overlap_param_gather = True
+    if args.use_distributed_optimizer:
+        is_use_distributed_optimizer = True
+    if args.tp_comm_overlap:
+        is_tp_comm_overlap = True
 
     # Llama-3.1-8B model
     model = LlamaModel(
@@ -78,6 +105,7 @@ if __name__ == "__main__":
             virtual_pipeline_model_parallel_size=args.virtual_pipeline_parallel_size,
             sequence_parallel=args.sequence_parallel,
             context_parallel_size=args.context_parallel_size,
+            tp_comm_overlap=is_tp_comm_overlap,
         ),
     )
     strategy = nl.MegatronStrategy(
@@ -86,6 +114,8 @@ if __name__ == "__main__":
         virtual_pipeline_model_parallel_size=args.virtual_pipeline_parallel_size,
         sequence_parallel=args.sequence_parallel,
         context_parallel_size=args.context_parallel_size,
+        save_ckpt_format="torch_dist",
+        ckpt_async_save=True,
     )
     optimizer = nl.MegatronOptimizerModule(
         config=OptimizerConfig(
@@ -93,14 +123,14 @@ if __name__ == "__main__":
             lr=args.lr,
             min_lr=args.min_lr,
             weight_decay=args.weight_decay,
-            adam_beta1=0.9,
-            adam_beta2=0.95,
-            adam_eps=1e-8,
-            clip_grad=1.0,
+            adam_beta1=args.adam_beta1,
+            adam_beta2=args.adam_beta2,
+            adam_eps=args.adam_eps,
+            clip_grad=args.clip_grad,
             bf16=True,
-            use_distributed_optimizer=True,
-            overlap_grad_reduce=True,
-            overlap_param_gather=True,
+            use_distributed_optimizer=is_use_distributed_optimizer,
+            overlap_grad_reduce=is_overlap_grad_reduce,
+            overlap_param_gather=is_overlap_param_gather,
         ),
         lr_scheduler=nl.lr_scheduler.CosineAnnealingScheduler(
             max_steps=args.train_iters,
@@ -112,10 +142,12 @@ if __name__ == "__main__":
         num_nodes=args.num_nodes,
         devices=args.gpu_per_node,
         accelerator="gpu",
-        plugins=nl.MegatronMixedPrecision(precision="bf16-mixed"),
+        plugins=nl.MegatronMixedPrecision(
+            precision="bf16-mixed",
+        ),
         max_steps=args.train_iters,
         strategy=strategy,
-        log_every_n_steps=1,
+        log_every_n_steps=args.log_interval,
         val_check_interval=500,
         limit_val_batches=10,
         limit_test_batches=10,
