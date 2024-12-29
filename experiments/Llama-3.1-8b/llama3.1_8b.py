@@ -9,6 +9,7 @@ from nemo.collections.llm.gpt.model.llama import Llama31Config8B, LlamaModel
 from megatron.core.optimizer import OptimizerConfig
 from pytorch_lightning.loggers import WandbLogger
 from nemo.lightning.pytorch.strategies.utils import RestoreConfig
+from nemo.lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 
 
 def parse_args():
@@ -52,6 +53,8 @@ def parse_args():
     parser.add_argument("--adam-beta2", type=float, default=0.95)
     parser.add_argument("--adam-eps", type=float, default=1e-8)
     parser.add_argument("--clip-grad", type=float, default=1.0)
+    # checkpoint args
+    parser.add_argument("--save-interval", type=int, default=500)
 
     args = parser.parse_args()
 
@@ -152,17 +155,38 @@ if __name__ == "__main__":
         limit_val_batches=10,
         limit_test_batches=10,
         num_sanity_val_steps=0,
+        enable_checkpointing=True,
+    )
+
+    # model checkpoint
+    # ref: https://docs.nvidia.com/nemo-framework/user-guide/latest/nemo-2.0/features/logging.html#putting-it-all-together
+    save_top_k = args.train_iters // args.save_interval
+    checkpoint_callback = ModelCheckpoint(
+        save_last=True,
+        monitor="reduced_train_loss",
+        save_top_k=save_top_k,
+        save_weights_only=False,
+        every_n_train_steps=args.save_interval,
+        verbose=True,
+        # if context save is enabled, when saving tokenizer, IsADirectoryError occurs.
+        always_save_context=False,
+        save_context_on_train_end=False,
+        dirpath=args.checkpoint_save_dir,
+        filename="{global_step}",
     )
 
     # logging
     nemo_logger = nl.NeMoLogger(
+        name="experiment",
         log_dir=args.checkpoint_save_dir,
         log_global_rank_0_only=True,
         wandb=WandbLogger(
             project=args.wandb_project,
             entity=args.wandb_entity,
             name=args.wandb_run_name,
-        )
+        ),
+        update_logger_directory=True,
+        ckpt=checkpoint_callback,
     )
     # resume
     checkpoint_dir: str = args.checkpoint_dir
