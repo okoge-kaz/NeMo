@@ -35,6 +35,7 @@ def parse_args():
     parser.add_argument("--virtual-pipeline-parallel-size", type=int, default=None)
     parser.add_argument("--sequence-parallel", action='store_true')
     parser.add_argument("--context-parallel-size", type=int, default=1)
+    parser.add_argument("--expert-parallel-size", type=int, default=1)
     parser.add_argument("--use-mpi", action='store_true')
     parser.add_argument("--num-nodes", type=int, default=1)
     parser.add_argument("--gpu-per-node", type=int, default=4)
@@ -71,6 +72,7 @@ if __name__ == "__main__":
         os.environ['LOCAL_RANK'] = str(local_rank)
         os.environ['WORLD_SIZE'] = str(world_size)
         os.environ["NODE_RANK"] = str(global_rank // args.gpu_per_node)
+        args.world_size = world_size
 
     tokenizer = get_tokenizer(  # AutoTokenizer
         tokenizer_name=args.tokenizer_dir,
@@ -108,9 +110,20 @@ if __name__ == "__main__":
             virtual_pipeline_model_parallel_size=args.virtual_pipeline_parallel_size,
             sequence_parallel=args.sequence_parallel,
             context_parallel_size=args.context_parallel_size,
+            expert_model_parallel_size=args.expert_parallel_size,
             tp_comm_overlap=is_tp_comm_overlap,
         ),
     )
+    # logging to wandb
+    model_parallel_size = (
+        args.tensor_parallel_size
+        * args.pipeline_parallel_size
+        * args.context_parallel_size
+        * args.expert_parallel_size
+    )
+    assert args.world_size % model_parallel_size == 0
+    args.data_parallel_size = args.world_size // model_parallel_size
+
     strategy = nl.MegatronStrategy(
         tensor_model_parallel_size=args.tensor_parallel_size,
         pipeline_model_parallel_size=args.pipeline_parallel_size,
@@ -172,6 +185,7 @@ if __name__ == "__main__":
         always_save_context=False,
         save_context_on_train_end=False,
         dirpath=args.checkpoint_save_dir,
+        # checkpoint save format: global_step={global_step}/weights/__dist_checkpoints
         filename="{global_step}",
     )
 
@@ -184,6 +198,7 @@ if __name__ == "__main__":
             project=args.wandb_project,
             entity=args.wandb_entity,
             name=args.wandb_run_name,
+            config=vars(args),
         ),
         update_logger_directory=True,
         ckpt=checkpoint_callback,
