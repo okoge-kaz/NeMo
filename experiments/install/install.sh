@@ -66,7 +66,7 @@ git checkout v2.2.2
 pip install .
 
 # nemo requirements
-pip install nemo_toolkit['all']
+pip install -e ".[all]"
 
 # pytorch re-install
 python setup.py develop

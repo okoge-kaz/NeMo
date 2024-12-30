@@ -409,6 +409,7 @@ class MegatronGPTModel(MegatronBaseModel, TextGeneration):
         self.initialize_ub = self.cfg.get('ub_tp_comm_overlap', False)
         self.log_train_loss = bool(int(os.getenv("NEMO_LOG_TRAIN_LOSS", 1)))
         self.log_memory_usage = bool(int(os.getenv("NEMO_LOG_MEMORY_USAGE", 0)))
+        self.log_optimization_metrics = bool(int(os.getenv("NEMO_LOG_OPTIMIZATION_METRICS", 0)))
         self.loss_broadcast_src_rank = None
         data_cfg = cfg.get('data', {})
         self.validation_drop_last = data_cfg.get('validation_drop_last', True)
@@ -935,14 +936,14 @@ class MegatronGPTModel(MegatronBaseModel, TextGeneration):
             max_memory_reserved = torch.cuda.max_memory_reserved()
             memory_allocated = torch.cuda.memory_allocated()
             self.log(
-                'peak_memory_usage',
+                'memory/peak_memory_usage',
                 max_memory_reserved,
                 prog_bar=True,
                 rank_zero_only=True,
                 batch_size=1,
             )
             self.log(
-                'memory_allocated',
+                'memory/memory_allocated',
                 memory_allocated,
                 prog_bar=True,
                 rank_zero_only=True,
@@ -960,6 +961,7 @@ class MegatronGPTModel(MegatronBaseModel, TextGeneration):
                 elif torch.distributed.get_rank() == 0:
                     torch.distributed.recv(loss_mean, get_last_rank())
             self.log('reduced_train_loss', loss_mean, prog_bar=True, rank_zero_only=True, batch_size=1)
+            self.log('train/train_loss', loss_mean, prog_bar=True, rank_zero_only=True, batch_size=1)
 
             # (@adithyare) we need to check for the _scaler attribute to enable pp>1 for adapter training
             if self.cfg.precision == 16 and hasattr(self.trainer.precision_plugin.scaler, "_scale"):
@@ -969,6 +971,46 @@ class MegatronGPTModel(MegatronBaseModel, TextGeneration):
 
         lr = self._optimizer.param_groups[0]['lr']
         self.log('lr', lr, rank_zero_only=True, batch_size=1)
+        self.log('optimizer/lr', lr, rank_zero_only=True, batch_size=1)
+
+        # optimizer states logging
+        if self.log_optimization_metrics:
+            optimizer_states_1 = [0.0] * 8
+            optimizer_states_2 = [0.0] * 4
+
+            for group in self._optimizer.param_groups:
+                for param in group['params']:
+                    if param in self._optimizer.state and 'exp_avg_sq' in self._optimizer.state[param]:
+                        exp_avg_sq = self._optimizer.state[param]['exp_avg_sq']
+                        exp_avg = self._optimizer.state[param]['exp_avg']
+                        optimizer_states_1[0] += (torch.norm(exp_avg_sq).item())**2
+                        optimizer_states_1[1] += (torch.norm(exp_avg_sq.sqrt()).item())**2
+                        optimizer_states_1[2] += (torch.norm(exp_avg).item())**2
+                        optimizer_states_1[3] += (torch.norm(param).item())**2
+                        optimizer_states_1[4] += (torch.norm(exp_avg_sq, p=1).item())
+                        optimizer_states_1[5] += (torch.norm(exp_avg_sq.sqrt(), p=1).item())
+                        optimizer_states_1[6] += (torch.norm(exp_avg, p=1).item())
+                        optimizer_states_1[7] += (torch.norm(param, p=1).item())
+
+                        optimizer_states_2[0] = max(optimizer_states_2[0], exp_avg_sq.abs().max().item())
+                        optimizer_states_2[1] = max(optimizer_states_2[1], exp_avg_sq.sqrt().abs().max().item())
+                        optimizer_states_2[2] = max(optimizer_states_2[2], exp_avg.abs().max().item())
+                        optimizer_states_2[3] = max(optimizer_states_2[3], param.abs().max().item())
+            # logging
+            self.log('optimizer/variance_l2', optimizer_states_1[0]**0.5, rank_zero_only=True, batch_size=1)
+            self.log('optimizer/variance_sqrt_l2', optimizer_states_1[1]**0.5, rank_zero_only=True, batch_size=1)
+            self.log('optimizer/momentum_l2', optimizer_states_1[2]**0.5, rank_zero_only=True, batch_size=1)
+            self.log('optimizer/param_l2', optimizer_states_1[3]**0.5, rank_zero_only=True, batch_size=1)
+            self.log('optimizer/variance_l1', optimizer_states_1[4], rank_zero_only=True, batch_size=1)
+            self.log('optimizer/variance_sqrt_l1', optimizer_states_1[5], rank_zero_only=True, batch_size=1)
+            self.log('optimizer/momentum_l1', optimizer_states_1[6], rank_zero_only=True, batch_size=1)
+            self.log('optimizer/param_l1', optimizer_states_1[7], rank_zero_only=True, batch_size=1)
+            self.log('optimizer/variance_max', optimizer_states_2[0], rank_zero_only=True, batch_size=1)
+            self.log('optimizer/variance_sqrt_max', optimizer_states_2[1], rank_zero_only=True, batch_size=1)
+            self.log('optimizer/momentum_max', optimizer_states_2[2], rank_zero_only=True, batch_size=1)
+            self.log('optimizer/param_max', optimizer_states_2[3], rank_zero_only=True, batch_size=1)
+
+
         self.log(
             'global_step',
             self.trainer.global_step,
@@ -996,6 +1038,7 @@ class MegatronGPTModel(MegatronBaseModel, TextGeneration):
             )
             current_global_batch_size = num_microbatch_calculator.current_global_batch_size
             self.log('global_batch_size', current_global_batch_size, prog_bar=True, rank_zero_only=True, batch_size=1)
+            self.log('utils/global_batch_size', current_global_batch_size, prog_bar=True, rank_zero_only=True, batch_size=1)
             self.if_first_step = 1
 
         return loss_mean
@@ -1497,6 +1540,7 @@ class MegatronGPTModel(MegatronBaseModel, TextGeneration):
             )
 
         self.log('val_loss', averaged_loss, prog_bar=True, rank_zero_only=True, batch_size=1)
+        self.log('val.val_loss', averaged_loss, prog_bar=True, rank_zero_only=True, batch_size=1)
         self.validation_step_outputs.clear()  # free memory
 
         return averaged_loss
