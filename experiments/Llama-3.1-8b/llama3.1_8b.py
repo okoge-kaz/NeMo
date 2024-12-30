@@ -151,6 +151,7 @@ if __name__ == "__main__":
         lr_scheduler=nl.lr_scheduler.CosineAnnealingScheduler(
             max_steps=args.train_iters,
             warmup_steps=args.warmup_iters,
+            constant_steps=0,
             min_lr=args.min_lr,
         )
     )
@@ -205,15 +206,20 @@ if __name__ == "__main__":
     )
     # resume
     checkpoint_dir: str = args.checkpoint_dir
+    restore_config = RestoreConfig(
+        path=checkpoint_dir,
+    )
+    auto_resume_dir = None
     # if some files exist in checkpoint save directory, resume training
     if os.path.exists(args.checkpoint_save_dir) and len(os.listdir(args.checkpoint_save_dir)) > 1:
         checkpoint_dir = args.checkpoint_save_dir
+        restore_config = None
+        auto_resume_dir = args.checkpoint_save_dir
 
     resume = nl.AutoResume(
         resume_if_exists=True,
-        restore_config=RestoreConfig(
-            path=checkpoint_dir,
-        )
+        restore_config=restore_config,
+        resume_from_directory=auto_resume_dir,
     )
 
     llm.train(

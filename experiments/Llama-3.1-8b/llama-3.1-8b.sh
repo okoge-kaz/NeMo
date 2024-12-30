@@ -1,7 +1,7 @@
 #!/bin/sh
 #$ -cwd
-#$ -l node_f=4
-#$ -l h_rt=00:01:00:00
+#$ -l node_f=2
+#$ -l h_rt=00:10:00:00
 #$ -o outputs/Llama-3.1-8b/$JOB_ID.log
 #$ -e outputs/Llama-3.1-8b/$JOB_ID.log
 #$ -p -3
@@ -44,7 +44,7 @@ PIPELINE_PARALLEL_SIZE=1
 DATA_PARALLEL_SIZE=$((${NUM_GPUS} / (${TENSOR_PARALLEL_SIZE} * ${PIPELINE_PARALLEL_SIZE})))
 
 # training config
-MICRO_BATCH_SIZE=1
+MICRO_BATCH_SIZE=2
 GLOBAL_BATCH_SIZE=512
 TRAIN_STEPS=25000
 SEQ_LENGTH=8192
@@ -112,7 +112,7 @@ mpirun -np $NUM_GPUS \
   --adam-beta2 0.95 \
   --adam-eps 1e-8 \
   --clip-grad 1.0 \
-  --save-interval 10 \
+  --save-interval 500 \
   --wandb-project "NeMo" \
   --wandb-entity "okoge" \
   --wandb-run-name ${JOB_NAME}
