@@ -23,6 +23,9 @@ mkdir -p $HF_CHECKPOINT_DIR
 mkdir -p $HF_CHECKPOINT_DIR/hf
 mkdir -p $HF_CHECKPOINT_DIR/pytorch
 
+# tokenizer setting
+TOKENIZER_DIR="/groups/gag51395/hf_checkpoints/Llama-3.1-Swallow-8B-v0.5"
+
 # singularity image
 SINGULARITY_IMAGE="/groups/gag51395/fujii/container/ngc-pytorch-25.04-te.sif"
 
@@ -38,7 +41,11 @@ singularity exec \
     PYTHONPATH=/groups/gag51395/fujii/src/NeMo \
     python scripts/checkpoint_converters/convert_llama_nemo_to_hf.py\
     --input_name_or_path $NEMO_CHECKPOINT_PATH \
-    --output_path $HF_CHECKPOINT_DIR/pytorch \
+    --output_path $HF_CHECKPOINT_DIR/pytorch/pytorch_model.bin \
     --hf_input_path /groups/gag51395/hf_checkpoints/Llama-3.1-Swallow-8B-v0.5 \
     --hf_output_path $HF_CHECKPOINT_DIR/hf \
     --cpu-only"
+
+# copy tokenizer files
+cp $TOKENIZER_DIR/tokenizer* $HF_CHECKPOINT_DIR/hf/
+cp $TOKENIZER_DIR/special_tokens_map.json $HF_CHECKPOINT_DIR/hf/
