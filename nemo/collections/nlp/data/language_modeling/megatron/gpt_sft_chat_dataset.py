@@ -242,10 +242,7 @@ def _add_speaker_and_signal(header, source, mask_role, gtype, special_tokens):
                 f"source type {gtype} not supported, only 'VALUE_TO_TEXT' and 'TEXT_TO_VALUE' are supported"
             )
         conversation += sentence["value"]
-        # if the last turn is not masked, add next token start token to the end,
-        # which will be included for loss calculation
-        if sentence_from not in mask_role and i == len(source) - 1:
-            conversation += TURN_TOKEN
+
     return conversation
 
 
@@ -267,8 +264,10 @@ def preprocess(
     header, conversation, data_type, mask_role = _get_header_conversation_type_mask_role(source, special_tokens)
     # tokenize conversations
     input_ids = tokenizer.text_to_ids(conversation)
+    input_ids = [tokenizer.bos_id] + input_ids  # type: ignore
     target = copy.deepcopy(input_ids)
     header_tokens = tokenizer.text_to_ids(header)
+    header_tokens = [tokenizer.bos_id] + header_tokens  # type: ignore
     header_len = len(header_tokens)
 
     ids = []
